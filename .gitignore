@@ -1,0 +1,38 @@
+# MATLAB temporary and autosave files
+*.asv
+*.m~
+*.slxc
+
+# MATLAB data and figure files
+*.mat
+*.fig
+
+# Output folders
+output/
+report/figures/
+
+# Large image datasets
+images/raw/
+
+# Video recordings
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Archives
+*.zip
+*.rar
+*.7z
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary folders
+temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
