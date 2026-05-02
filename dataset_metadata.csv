@@ -1,1 +1,2 @@
 image_name,image_path,vehicle_type,expected_plate_text,expected_state,plate_type,distance,lighting,background,angle,source,notes
+sample_car.jpg,images/test/sample_car.jpg,car,UNKNOWN,UNKNOWN,standard,unknown,unknown,unknown,unknown,unknown,initial sample image for preprocessing and pipeline testing
