@@ -20,22 +20,25 @@
 % Author : Member 2
 
 clc; clear; close all;
-addpath(genpath('src'));
+scriptPath = mfilename('fullpath');
+scriptFolder = fileparts(scriptPath);
+projectRoot = fileparts(scriptFolder);
+addpath(genpath(fullfile(projectRoot, 'src')));
 
 % -------------------------------------------------------------------------
 % 1. Load test image
 % -------------------------------------------------------------------------
-testImagePath = fullfile('images', 'test', 'sample_car.jpg');
+imagePath = fullfile(projectRoot, 'images', 'test', 'sample_car.jpg');
 
-if ~isfile(testImagePath)
-    fprintf('[TEST M2] Test image not found: %s\n', testImagePath);
+if ~isfile(imagePath)
+    fprintf('[TEST M2] Test image not found: %s\n', imagePath);
     fprintf('[TEST M2] Add a vehicle image at images/test/sample_car.jpg and re-run.\n');
     return;
 end
 
-originalImg = imread(testImagePath);
+originalImg = imread(imagePath);
 fprintf('[TEST M2] Image loaded: %s  [%d x %d x %d]\n', ...
-    testImagePath, size(originalImg, 1), size(originalImg, 2), size(originalImg, 3));
+    imagePath, size(originalImg, 1), size(originalImg, 2), size(originalImg, 3));
 
 % -------------------------------------------------------------------------
 % 2. Preprocessing — use Member 1 if available, else basic fallback
