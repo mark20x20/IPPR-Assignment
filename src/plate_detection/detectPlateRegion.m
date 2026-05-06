@@ -1,4 +1,4 @@
-function [plateImg, plateBBox, plateFound, debugInfo] = detectPlateRegion(preprocessedImg, originalImg)
+function [plateImg, plateBBox, debugInfo] = detectPlateRegion(preprocessedImg, originalImg)
 % detectPlateRegion  Detects and crops the most likely license plate region.
 %
 % Member 2 module: License Plate Detection
@@ -26,15 +26,14 @@ function [plateImg, plateBBox, plateFound, debugInfo] = detectPlateRegion(prepro
 % Outputs:
 %   plateImg   - cropped plate image (grayscale), [] if none found
 %   plateBBox  - [x y width height] bounding box,  [] if none found
-%   plateFound - logical scalar: true when a valid plate was detected
 %   debugInfo  - struct of intermediate images and candidate data
-%                (optional 4th output; not required by main.m)
+%                includes debugInfo.plateFound logical flag
 %
 % Usage (main pipeline):
-%   [plateImg, plateBBox, plateFound] = detectPlateRegion(pre, orig);
+%   [plateImg, plateBBox, dbg] = detectPlateRegion(pre, orig);
 %
 % Usage (scratch / debug):
-%   [plateImg, plateBBox, plateFound, dbg] = detectPlateRegion(pre, orig);
+%   [plateImg, plateBBox, dbg] = detectPlateRegion(pre, orig);
 %
 % Author : Member 2
 % Module : src/plate_detection/detectPlateRegion.m
@@ -42,7 +41,6 @@ function [plateImg, plateBBox, plateFound, debugInfo] = detectPlateRegion(prepro
     % --- Safe fallback defaults -------------------------------------------
     plateImg   = [];
     plateBBox  = [];
-    plateFound = false;
 
     debugInfo = struct( ...
         'grayImg',        [], ...
@@ -54,6 +52,7 @@ function [plateImg, plateBBox, plateFound, debugInfo] = detectPlateRegion(prepro
         'candidateMask',  [], ...
         'regions',        [], ...
         'candidateTable', table(), ...
+        'plateFound',     false, ...
         'status',         "Not started" ...
     );
 
@@ -162,12 +161,12 @@ function [plateImg, plateBBox, plateFound, debugInfo] = detectPlateRegion(prepro
         debugInfo.candidateTable = candidateTable;
 
         if isempty(plateImg)
-            plateFound       = false;
+            debugInfo.plateFound = false;
             plateBBox        = [];
             debugInfo.status = "No valid plate candidate found. Safe fallback returned.";
             warning('detectPlateRegion: no plate candidate passed all filters.');
         else
-            plateFound       = true;
+            debugInfo.plateFound = true;
             debugInfo.status = "Plate candidate detected and cropped successfully.";
             fprintf('[detectPlateRegion] Plate found at [%.0f %.0f %.0f %.0f]\n', plateBBox);
         end
@@ -176,7 +175,7 @@ function [plateImg, plateBBox, plateFound, debugInfo] = detectPlateRegion(prepro
         % Any unexpected error returns safe fallbacks — pipeline never crashes.
         plateImg         = [];
         plateBBox        = [];
-        plateFound       = false;
+        debugInfo.plateFound = false;
         debugInfo.status = "Detection failed safely: " + string(ME.message);
         warning('detectPlateRegion: caught error — %s', ME.message);
     end

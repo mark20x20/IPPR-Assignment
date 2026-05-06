@@ -57,10 +57,11 @@ end
 % -------------------------------------------------------------------------
 fprintf('[TEST M2] Running detectPlateRegion...\n');
 tic;
-[plateImg, plateBBox, plateFound, dbg] = detectPlateRegion(preprocessedImg, originalImg);
+[plateImg, plateBBox, detectionDebug] = detectPlateRegion(preprocessedImg, originalImg);
 elapsed = toc;
+plateFound = isfield(detectionDebug, 'plateFound') && detectionDebug.plateFound;
 
-fprintf('[TEST M2] Status  : %s\n', dbg.status);
+fprintf('[TEST M2] Status  : %s\n', detectionDebug.status);
 fprintf('[TEST M2] Found   : %d\n', plateFound);
 fprintf('[TEST M2] Time    : %.3f s\n', elapsed);
 if plateFound
@@ -70,9 +71,9 @@ end
 % -------------------------------------------------------------------------
 % 4. Print candidate scoring table
 % -------------------------------------------------------------------------
-if ~isempty(dbg.candidateTable)
+if ~isempty(detectionDebug.candidateTable)
     fprintf('\n--- Candidate Scoring Table (top candidates) ---\n');
-    disp(dbg.candidateTable(1:min(10, height(dbg.candidateTable)), :));
+    disp(detectionDebug.candidateTable(1:min(10, height(detectionDebug.candidateTable)), :));
 else
     fprintf('[TEST M2] No candidates survived the filters.\n');
 end
@@ -95,8 +96,8 @@ title('2. Preprocessed Input', 'FontWeight', 'bold');
 
 % Panel 3: CLAHE enhanced
 subplot(2, 4, 3);
-if ~isempty(dbg.enhancedImg)
-    imshow(dbg.enhancedImg);
+if ~isempty(detectionDebug.enhancedImg)
+    imshow(detectionDebug.enhancedImg);
 else
     imshow(zeros(10, 10, 'uint8'));
 end
@@ -104,8 +105,8 @@ title('3. CLAHE Enhanced', 'FontWeight', 'bold');
 
 % Panel 4: Canny edges
 subplot(2, 4, 4);
-if ~isempty(dbg.edgeImg)
-    imshow(dbg.edgeImg);
+if ~isempty(detectionDebug.edgeImg)
+    imshow(detectionDebug.edgeImg);
 else
     imshow(false(10, 10));
 end
@@ -113,8 +114,8 @@ title('4. Canny Edges', 'FontWeight', 'bold');
 
 % Panel 5: After dual morphological closing
 subplot(2, 4, 5);
-if ~isempty(dbg.closedImg)
-    imshow(dbg.closedImg);
+if ~isempty(detectionDebug.closedImg)
+    imshow(detectionDebug.closedImg);
 else
     imshow(false(10, 10));
 end
@@ -122,8 +123,8 @@ title('5. Dual Morph. Closing', 'FontWeight', 'bold');
 
 % Panel 6: Cleaned binary (after fill, area open, border clear)
 subplot(2, 4, 6);
-if ~isempty(dbg.cleanedImg)
-    imshow(dbg.cleanedImg);
+if ~isempty(detectionDebug.cleanedImg)
+    imshow(detectionDebug.cleanedImg);
 else
     imshow(false(10, 10));
 end
