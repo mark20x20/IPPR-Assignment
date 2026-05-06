@@ -68,14 +68,35 @@ if plateFound
     fprintf('[TEST M2] BBox    : [%.0f %.0f %.0f %.0f]\n', plateBBox);
 end
 
+if isfield(detectionDebug, 'numRegionsBeforeFiltering')
+    fprintf('[TEST M2] Regions before filtering: %d\n', detectionDebug.numRegionsBeforeFiltering);
+end
+if isfield(detectionDebug, 'numConnectedComponents')
+    fprintf('[TEST M2] Connected components (cleaned binary): %d\n', detectionDebug.numConnectedComponents);
+end
+
 % -------------------------------------------------------------------------
 % 4. Print candidate scoring table
 % -------------------------------------------------------------------------
 if ~isempty(detectionDebug.candidateTable)
+    fprintf('[TEST M2] Surviving candidates: %d\n', height(detectionDebug.candidateTable));
     fprintf('\n--- Candidate Scoring Table (top candidates) ---\n');
     disp(detectionDebug.candidateTable(1:min(10, height(detectionDebug.candidateTable)), :));
 else
+    fprintf('[TEST M2] Surviving candidates: 0\n');
     fprintf('[TEST M2] No candidates survived the filters.\n');
+end
+
+if isfield(detectionDebug, 'rejectReasonSummary') && istable(detectionDebug.rejectReasonSummary) ...
+        && ~isempty(detectionDebug.rejectReasonSummary)
+    fprintf('\n--- Reject Reason Summary ---\n');
+    disp(detectionDebug.rejectReasonSummary);
+end
+
+if isfield(detectionDebug, 'candidateDiagnostics') && istable(detectionDebug.candidateDiagnostics) ...
+        && ~isempty(detectionDebug.candidateDiagnostics)
+    fprintf('\n--- Candidate Diagnostics (first 15 rows) ---\n');
+    disp(detectionDebug.candidateDiagnostics(1:min(15, height(detectionDebug.candidateDiagnostics)), :));
 end
 
 % -------------------------------------------------------------------------

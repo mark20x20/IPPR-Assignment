@@ -2,61 +2,30 @@ function [plateImg, plateBBox, debugInfo] = detectPlateRegion(preprocessedImg, o
 % detectPlateRegion  Detects and crops the most likely license plate region.
 %
 % Member 2 module: License Plate Detection
-% Pipeline stage: runs after preprocessing (Member 1), output is consumed
-% by segmentation (Member 3) and the GUI (Member 4).
-%
-% Approach: classical image processing only.
-% Methods used:
-%   - Adaptive histogram equalisation (CLAHE) for lighting robustness
-%   - Gaussian smoothing for noise suppression
-%   - Canny edge detection
-%   - Dual morphological closing (single-row + two-row plate SE)
-%   - Hole filling and border clearing
-%   - Connected-component feature extraction (regionprops)
-%   - Weighted geometric + intensity scoring
-%
-% NOT used (prohibited by assignment):
-%   Haar Cascade, TensorFlow, YOLO, deep learning detectors,
-%   template matching, pattern matching.
-%
-% Inputs:
-%   preprocessedImg - grayscale or colour image from Member 1 preprocessing
-%   originalImg     - original colour/grayscale image used for final crop
-%
-% Outputs:
-%   plateImg   - cropped plate image (grayscale), [] if none found
-%   plateBBox  - [x y width height] bounding box,  [] if none found
-%   debugInfo  - struct of intermediate images and candidate data
-%                includes debugInfo.plateFound logical flag
-%
-% Usage (main pipeline):
-%   [plateImg, plateBBox, dbg] = detectPlateRegion(pre, orig);
-%
-% Usage (scratch / debug):
-%   [plateImg, plateBBox, dbg] = detectPlateRegion(pre, orig);
-%
-% Author : Member 2
-% Module : src/plate_detection/detectPlateRegion.m
+% Classical image processing only.
 
-    % --- Safe fallback defaults -------------------------------------------
-    plateImg   = [];
-    plateBBox  = [];
+    plateImg  = [];
+    plateBBox = [];
 
     debugInfo = struct( ...
-        'grayImg',        [], ...
-        'enhancedImg',    [], ...
-        'edgeImg',        [], ...
-        'closedImg',      [], ...
-        'filledImg',      [], ...
-        'cleanedImg',     [], ...
-        'candidateMask',  [], ...
-        'regions',        [], ...
+        'grayImg', [], ...
+        'enhancedImg', [], ...
+        'edgeImg', [], ...
+        'closedImg', [], ...
+        'filledImg', [], ...
+        'cleanedImg', [], ...
+        'candidateMask', [], ...
+        'regions', [], ...
+        'numConnectedComponents', 0, ...
+        'numRegionsBeforeFiltering', 0, ...
+        'regionStatsSummary', struct(), ...
+        'candidateDiagnostics', table(), ...
+        'rejectReasonSummary', table(), ...
         'candidateTable', table(), ...
-        'plateFound',     false, ...
-        'status',         "Not started" ...
+        'plateFound', false, ...
+        'status', "Not started" ...
     );
 
-    % --- Input validation -------------------------------------------------
     if nargin < 2 || isempty(preprocessedImg) || isempty(originalImg)
         debugInfo.status = "Input image is empty or missing.";
         warning('detectPlateRegion: empty input received. Returning fallback.');
@@ -64,105 +33,106 @@ function [plateImg, plateBBox, debugInfo] = detectPlateRegion(preprocessedImg, o
     end
 
     try
-        % =================================================================
-        % STEP 1 — Convert to grayscale uint8
-        % =================================================================
         grayImg = localToGrayUint8(preprocessedImg);
 
-        % =================================================================
-        % STEP 2 — Adaptive histogram equalisation (CLAHE)
-        % Rayleigh distribution suits natural scenes where most pixels are
-        % mid-tone; ClipLimit=0.015 avoids amplifying noise in flat regions.
-        % This makes the function robust to over/under exposure and shadows.
-        % =================================================================
+        MAX_WORKING_WIDTH = 900;
+        [imgH, imgW] = size(grayImg); %#ok<ASGLU>
+        if imgW > MAX_WORKING_WIDTH
+            scaleFactor      = MAX_WORKING_WIDTH / imgW;
+            grayImg          = imresize(grayImg, scaleFactor);
+            preprocessedImg  = imresize(preprocessedImg, scaleFactor);
+            originalImgSmall = imresize(originalImg, scaleFactor);
+        else
+            scaleFactor      = 1.0;
+            originalImgSmall = originalImg;
+        end
+
         enhancedImg = adapthisteq(grayImg, ...
-            'ClipLimit',    0.015, ...
+            'ClipLimit', 0.015, ...
             'Distribution', 'rayleigh');
 
-        % =================================================================
-        % STEP 3 — Gaussian smoothing (sigma = 1.0)
-        % Removes high-frequency sensor noise before edge detection so
-        % Canny does not create spurious edges from grain or JPEG artefacts.
-        % =================================================================
         smoothImg = imgaussfilt(enhancedImg, 1.0);
 
-        % =================================================================
-        % STEP 4 — Canny edge detection (auto thresholds)
-        % Canny is preferred over Sobel/Prewitt because:
-        %   - Built-in Gaussian smoothing (double noise suppression)
-        %   - Hysteresis thresholding reduces disconnected false edges
-        %   - Produces thin, accurately localised edges at plate borders
-        % Auto thresholds allow the function to adapt across image types.
-        % =================================================================
         edgeImg = edge(smoothImg, 'Canny');
 
-        % =================================================================
-        % STEP 5 — Dual morphological closing
-        % Two structuring elements handle both main plate geometries in
-        % Malaysian vehicle registration:
-        %   horizontalSE [4x28] — single-row plates (most states, cars)
-        %   twoRowSE     [9x22] — two-row plates (motorcycles, some states)
-        % The union of both closed images robustly captures both types.
-        % =================================================================
-        horizontalSE     = strel('rectangle', [4, 28]);
-        twoRowSE         = strel('rectangle', [9, 22]);
+        refWidth     = 900;
+        seScale      = max(1, round(size(grayImg, 2) / refWidth));
+        horizontalSE = strel('rectangle', [2 * seScale, 18 * seScale]);
+        twoRowSE     = strel('rectangle', [4 * seScale, 14 * seScale]);
+
         closedHorizontal = imclose(edgeImg, horizontalSE);
         closedTwoRow     = imclose(edgeImg, twoRowSE);
         closedImg        = closedHorizontal | closedTwoRow;
 
-        % =================================================================
-        % STEP 6 — Hole filling, noise removal, border clearing
-        % imfill closes gaps inside blobs (plate interior text creates holes).
-        % bwareaopen uses an image-proportional minimum area so the function
-        % scales from close-up to distant vehicle shots without retuning.
-        % imclearborder removes blobs touching the image frame — these are
-        % almost always vehicle body panels or road markings, never plates.
-        % =================================================================
-        filledImg  = imfill(closedImg, 'holes');
-        minArea    = max(150, round(numel(grayImg) * 0.0001));
-        cleanedImg = bwareaopen(filledImg, minArea);
-        cleanedImg = imclearborder(cleanedImg);
+        % Remove oversized components before hole-filling to avoid deleting
+        % a car-wide silhouette created by global fill.
+        minArea = max(40, round(numel(grayImg) * 0.00002));
+        cleanedImg = bwareaopen(closedImg, minArea);
+        cleanedImg = removeOversizedComponents(cleanedImg, 0.25);
+        filledImg = imfill(cleanedImg, 'holes');
+        cleanedImg = filledImg;
+        topMargin = max(1, round(size(cleanedImg, 1) * 0.04));
+        borderMask = false(size(cleanedImg));
+        borderMask(1:topMargin, :) = true;
+        cleanedImg(borderMask & cleanedImg) = false;
+        bridgeSE   = strel('rectangle', [2, 1]);
+        cleanedImg = imerode(cleanedImg, bridgeSE);
+        cleanedImg = bwareaopen(cleanedImg, minArea);
+        cc = bwconncomp(cleanedImg);
+        debugInfo.numConnectedComponents = cc.NumObjects;
 
-        % =================================================================
-        % STEP 7 — Connected-component feature extraction (regionprops)
-        % MeanIntensity is measured on the CLAHE-enhanced image so it
-        % reflects local brightness independent of global exposure level.
-        % =================================================================
         regions = regionprops(cleanedImg, enhancedImg, ...
             'BoundingBox', 'Area', 'Extent', 'Solidity', ...
             'Eccentricity', 'MajorAxisLength', 'MinorAxisLength', ...
             'MeanIntensity');
+        debugInfo.numRegionsBeforeFiltering = numel(regions);
+        debugInfo.regionStatsSummary = buildRegionStatsSummary(regions, size(grayImg));
 
-        % =================================================================
-        % STEP 8 — Weighted multi-feature candidate scoring and selection
-        % =================================================================
-        [plateBBox, candidateTable] = selectPlateCandidate(regions, size(grayImg));
+        % CRITICAL FIX:
+        % Pass edgeImg so selectPlateCandidate activates edge-based filtering.
+        [plateBBoxSmall, candidateTable] = selectPlateCandidate(regions, size(grayImg), edgeImg);
+        candidateDiagnostics = getappdata(0, 'selectPlateCandidateDiagnostics');
+        if istable(candidateDiagnostics)
+            debugInfo.candidateDiagnostics = candidateDiagnostics;
+            if ~isempty(candidateDiagnostics) && any(strcmp(candidateDiagnostics.Properties.VariableNames, 'RejectReason'))
+                rejectReasons = string(candidateDiagnostics.RejectReason);
+                [uReasons, ~, idx] = unique(rejectReasons);
+                counts = accumarray(idx, 1);
+                debugInfo.rejectReasonSummary = table(uReasons, counts, ...
+                    'VariableNames', {'Reason', 'Count'});
+                debugInfo.rejectReasonSummary = sortrows(debugInfo.rejectReasonSummary, 'Count', 'descend');
+            end
+        end
 
-        % =================================================================
-        % STEP 9 — Adaptive-padding crop from original image
-        % =================================================================
-        plateImg = cropPlateRegion(originalImg, plateBBox);
+        plateImg = cropPlateRegion(originalImgSmall, plateBBoxSmall);
+        plateBBox = plateBBoxSmall;
+        if ~isempty(plateBBoxSmall) && scaleFactor < 1.0
+            plateBBox = [ ...
+                plateBBoxSmall(1) / scaleFactor, ...
+                plateBBoxSmall(2) / scaleFactor, ...
+                plateBBoxSmall(3) / scaleFactor, ...
+                plateBBoxSmall(4) / scaleFactor];
+            plateImg = cropPlateRegion(originalImg, plateBBox);
+        end
 
-        % Build binary candidate mask for visualisation / debug figure
         candidateMask = false(size(grayImg));
         if ~isempty(plateBBox)
             candidateMask = insertCandidateMask(candidateMask, plateBBox);
         end
 
-        % Pack debug struct (used by scratch test and report figures)
-        debugInfo.grayImg        = grayImg;
-        debugInfo.enhancedImg    = enhancedImg;
-        debugInfo.edgeImg        = edgeImg;
-        debugInfo.closedImg      = closedImg;
-        debugInfo.filledImg      = filledImg;
-        debugInfo.cleanedImg     = cleanedImg;
-        debugInfo.candidateMask  = candidateMask;
-        debugInfo.regions        = regions;
-        debugInfo.candidateTable = candidateTable;
+        debugInfo.grayImg         = grayImg;
+        debugInfo.enhancedImg     = enhancedImg;
+        debugInfo.edgeImg         = edgeImg;
+        debugInfo.closedImg       = closedImg;
+        debugInfo.filledImg       = filledImg;
+        debugInfo.cleanedImg      = cleanedImg;
+        debugInfo.candidateMask   = candidateMask;
+        debugInfo.regions         = regions;
+        debugInfo.candidateTable  = candidateTable;
 
         if isempty(plateImg)
             debugInfo.plateFound = false;
-            plateBBox        = [];
+            plateBBox = [];
             debugInfo.status = "No valid plate candidate found. Safe fallback returned.";
             warning('detectPlateRegion: no plate candidate passed all filters.');
         else
@@ -172,28 +142,84 @@ function [plateImg, plateBBox, debugInfo] = detectPlateRegion(preprocessedImg, o
         end
 
     catch ME
-        % Any unexpected error returns safe fallbacks — pipeline never crashes.
-        plateImg         = [];
-        plateBBox        = [];
+        plateImg = [];
+        plateBBox = [];
         debugInfo.plateFound = false;
         debugInfo.status = "Detection failed safely: " + string(ME.message);
-        warning('detectPlateRegion: caught error — %s', ME.message);
+        warning('detectPlateRegion: caught error - %s', ME.message);
     end
 end
 
 
-% =========================================================================
-% LOCAL HELPER FUNCTIONS
-% =========================================================================
+function bwOut = removeOversizedComponents(bwIn, maxAreaRatio)
+    bwOut = bwIn;
+    if isempty(bwIn)
+        return;
+    end
+
+    cc = bwconncomp(bwIn);
+    if cc.NumObjects == 0
+        return;
+    end
+
+    imgArea = numel(bwIn);
+    maxArea = maxAreaRatio * imgArea;
+    stats = regionprops(cc, 'Area');
+
+    keepMask = true(size(bwIn));
+    for k = 1:cc.NumObjects
+        if stats(k).Area > maxArea
+            keepMask(cc.PixelIdxList{k}) = false;
+        end
+    end
+
+    bwOut = bwIn & keepMask;
+end
+
+
+function stats = buildRegionStatsSummary(regions, imageSize)
+    stats = struct( ...
+        'numRegions', 0, ...
+        'imageArea', imageSize(1) * imageSize(2), ...
+        'areaMin', NaN, ...
+        'areaMedian', NaN, ...
+        'areaMax', NaN, ...
+        'aspectMin', NaN, ...
+        'aspectMedian', NaN, ...
+        'aspectMax', NaN ...
+    );
+
+    if isempty(regions)
+        return;
+    end
+
+    areas = [regions.Area]';
+    bboxes = reshape([regions.BoundingBox], 4, []).';
+    widths = bboxes(:, 3);
+    heights = max(bboxes(:, 4), 1);
+    aspects = widths ./ heights;
+
+    stats.numRegions   = numel(regions);
+    stats.areaMin      = min(areas);
+    stats.areaMedian   = median(areas);
+    stats.areaMax      = max(areas);
+    stats.aspectMin    = min(aspects);
+    stats.aspectMedian = median(aspects);
+    stats.aspectMax    = max(aspects);
+end
+
 
 function grayImg = localToGrayUint8(inputImg)
-% localToGrayUint8  Converts any numeric image to uint8 grayscale.
     if size(inputImg, 3) == 3
         grayImg = rgb2gray(inputImg);
     else
         grayImg = inputImg;
     end
-    if isa(grayImg, 'uint8'), return; end
+
+    if isa(grayImg, 'uint8')
+        return;
+    end
+
     if isfloat(grayImg)
         grayImg = im2uint8(mat2gray(grayImg));
     else
@@ -203,13 +229,14 @@ end
 
 
 function mask = insertCandidateMask(mask, bbox)
-% insertCandidateMask  Sets pixels inside bbox region to true.
     imgH = size(mask, 1);
     imgW = size(mask, 2);
-    x1 = max(1,    floor(bbox(1)));
-    y1 = max(1,    floor(bbox(2)));
+
+    x1 = max(1, floor(bbox(1)));
+    y1 = max(1, floor(bbox(2)));
     x2 = min(imgW, ceil(bbox(1) + bbox(3)));
     y2 = min(imgH, ceil(bbox(2) + bbox(4)));
+
     if x2 > x1 && y2 > y1
         mask(y1:y2, x1:x2) = true;
     end

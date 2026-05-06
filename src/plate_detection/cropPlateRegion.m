@@ -1,6 +1,10 @@
 function plateImg = cropPlateRegion(originalImg, plateBBox)
 % cropPlateRegion  Crops the selected plate region from the original image.
 %
+% The caller is responsible for passing an image and bounding box that are
+% already in the same coordinate scale (for example, resized working scale
+% or full-resolution original scale).
+%
 % Adaptive padding is added around the detected bounding box to ensure the
 % full plate border and characters are included even when the detector
 % localises the plate slightly too tightly.

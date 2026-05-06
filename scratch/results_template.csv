@@ -1,0 +1,2 @@
+imageName,vehicleType,expectedText,ocrText,expectedState,predictedState,detectionResult,ocrResult,stateResult,overallResult,notes,Var12,Var13_1,Var13_2,Var13_3,Var13_4,Var13_5,Var13_6,Var13_7,Var13_8,Var13_9,Var13_10,Var13_11
+plate_selangor_01.jpg,plate_sample,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,Failure,Match,Match,Failure,,VariableNames,image_name,vehicle_type,expected_text,ocr_text,expected_state,predicted_state,detection_result,ocr_result,state_result,overall_result,notes
