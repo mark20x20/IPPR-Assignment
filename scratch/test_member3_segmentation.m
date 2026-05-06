@@ -13,28 +13,32 @@ clear;
 clc;
 close all;
 
-addpath(genpath("src"));
+scriptPath = mfilename("fullpath");
+scriptFolder = fileparts(scriptPath);
+projectRoot = fileparts(scriptFolder);
 
-sampleFolder = fullfile("images", "test", "plate_samples");
-outputFolder = fullfile("scratch", "member3_results");
+addpath(genpath(fullfile(projectRoot, "src")));
+
+plateSampleFolder = fullfile(projectRoot, "images", "test", "plate_samples");
+outputFolder = fullfile(projectRoot, "scratch", "member3_results");
 
 if ~isfolder(outputFolder)
     mkdir(outputFolder);
 end
 
-if ~isfolder(sampleFolder)
-    error("Plate sample folder not found: %s", sampleFolder);
+if ~isfolder(plateSampleFolder)
+    error("Plate sample folder not found: %s", plateSampleFolder);
 end
 
 imageFiles = [ ...
-    dir(fullfile(sampleFolder, "*.jpg")); ...
-    dir(fullfile(sampleFolder, "*.jpeg")); ...
-    dir(fullfile(sampleFolder, "*.png")); ...
-    dir(fullfile(sampleFolder, "*.bmp")) ...
+    dir(fullfile(plateSampleFolder, "*.jpg")); ...
+    dir(fullfile(plateSampleFolder, "*.jpeg")); ...
+    dir(fullfile(plateSampleFolder, "*.png")); ...
+    dir(fullfile(plateSampleFolder, "*.bmp")) ...
 ];
 
 if isempty(imageFiles)
-    error("No plate sample images found in: %s", sampleFolder);
+    error("No plate sample images found in: %s", plateSampleFolder);
 end
 
 fileNames = strings(numel(imageFiles), 1);
