@@ -19,7 +19,6 @@ function stateName = identifyState(cleanedText)
         return;
     end
 
-    % Check two-letter prefix first
     if strlength(textValue) >= 2
         twoPrefix = extractBetween(textValue, 1, 2);
         twoPrefix = string(twoPrefix);
@@ -33,7 +32,6 @@ function stateName = identifyState(cleanedText)
         end
     end
 
-    % Check single-letter prefix
     prefix = extractBetween(textValue, 1, 1);
     if isempty(prefix)
         return;
@@ -45,6 +43,20 @@ function stateName = identifyState(cleanedText)
             stateName = "Perak";
         case "B"
             stateName = "Selangor";
+        case "J"
+            stateName = "Johor";
+        case "K"
+            stateName = "Kedah";
+        case "M"
+            stateName = "Malacca";
+        case "N"
+            stateName = "Negeri Sembilan";
+        case "P"
+            stateName = "Penang";
+        case "T"
+            stateName = "Terengganu";
+        case "W"
+            stateName = "Kuala Lumpur";
         case "C"
             stateName = "Pahang";
         case "D"
@@ -55,30 +67,16 @@ function stateName = identifyState(cleanedText)
             stateName = "Pahang";
         case "H"
             stateName = "Kedah";
-        case "J"
-            stateName = "Johor";
-        case "K"
-            stateName = "Kedah";
         case "L"
             stateName = "Labuan";
-        case "M"
-            stateName = "Malacca";
-        case "N"
-            stateName = "Negeri Sembilan";
-        case "P"
-            stateName = "Penang";
         case "Q"
             stateName = "Sarawak";
         case "R"
             stateName = "Perlis";
         case "S"
             stateName = "Selangor";
-        case "T"
-            stateName = "Terengganu";
         case "V"
             stateName = "Selangor";
-        case "W"
-            stateName = "Kuala Lumpur";
         case "X"
             stateName = "Sabah";
         case "Y"
@@ -88,5 +86,4 @@ function stateName = identifyState(cleanedText)
         otherwise
             stateName = "UNKNOWN";
     end
-
 end

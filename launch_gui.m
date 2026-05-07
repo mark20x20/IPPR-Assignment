@@ -2,14 +2,20 @@ function launch_gui()
 % launch_gui launches the LPR and SIS graphical user interface.
 
     addpath(genpath('src'));
-    ensureOutputFolders();
+    paths = ensureOutputFolders();
 
     % Initialize state
     state.originalImg = [];
     state.plateImg = [];
+    state.plateBBox = [];
+    state.detectionDebug = struct();
+    state.segmentationDebug = struct();
+    state.ocrDebug = struct();
+    state.rawText = "UNKNOWN";
     state.cleanedText = "UNKNOWN";
     state.stateName = "UNKNOWN";
     state.imagePath = "";
+    state.guiResultsCsv = string(paths.guiResultsCsv);
 
     % Create main figure
     fig = figure( ...
@@ -127,12 +133,104 @@ function launch_gui()
         'ForegroundColor', [0.2 0.2 0.2], ...
         'BackgroundColor', [0.88 0.92 0.98]);
 
+    % Debug/log path panel
+    uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.03, 0.095, 0.19, 0.03], ...
+        'String', 'Detection Debug Folder:', ...
+        'FontSize', 9, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+    txtDetectDir = uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.21, 0.095, 0.76, 0.03], ...
+        'String', 'Not available', ...
+        'FontSize', 8, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+
+    uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.03, 0.070, 0.19, 0.03], ...
+        'String', 'Segmentation Debug Folder:', ...
+        'FontSize', 9, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+    txtSegDir = uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.21, 0.070, 0.76, 0.03], ...
+        'String', 'Not available', ...
+        'FontSize', 8, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+
+    uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.03, 0.045, 0.19, 0.03], ...
+        'String', 'Recognition Debug Folder:', ...
+        'FontSize', 9, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+    txtRecDir = uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.21, 0.045, 0.76, 0.03], ...
+        'String', 'Not available', ...
+        'FontSize', 8, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+
+    uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.03, 0.020, 0.19, 0.03], ...
+        'String', 'GUI Results CSV:', ...
+        'FontSize', 9, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+    txtGuiCsv = uicontrol('Style', 'text', ...
+        'Units', 'normalized', ...
+        'Position', [0.21, 0.020, 0.76, 0.03], ...
+        'String', char(state.guiResultsCsv), ...
+        'FontSize', 8, ...
+        'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [0.88 0.92 0.98]);
+
+    % Open-folder buttons
+    uicontrol('Style', 'pushbutton', ...
+        'String', 'Open Detection Log', ...
+        'Units', 'normalized', ...
+        'Position', [0.40, 0.85, 0.13, 0.06], ...
+        'FontSize', 10, ...
+        'Callback', @onOpenDetectionLog);
+    uicontrol('Style', 'pushbutton', ...
+        'String', 'Open Segmentation Log', ...
+        'Units', 'normalized', ...
+        'Position', [0.54, 0.85, 0.13, 0.06], ...
+        'FontSize', 10, ...
+        'Callback', @onOpenSegmentationLog);
+    uicontrol('Style', 'pushbutton', ...
+        'String', 'Open Recognition Log', ...
+        'Units', 'normalized', ...
+        'Position', [0.68, 0.85, 0.13, 0.06], ...
+        'FontSize', 10, ...
+        'Callback', @onOpenRecognitionLog);
+    uicontrol('Style', 'pushbutton', ...
+        'String', 'Open Report Tables', ...
+        'Units', 'normalized', ...
+        'Position', [0.82, 0.85, 0.15, 0.06], ...
+        'FontSize', 10, ...
+        'Callback', @onOpenReportTables);
+
     % Store UI handles
     ui.axOriginal = axOriginal;
     ui.axPlate = axPlate;
     ui.txtRecognized = txtRecognized;
     ui.txtState = txtState;
     ui.txtStatus = txtStatus;
+    ui.txtDetectDir = txtDetectDir;
+    ui.txtSegDir = txtSegDir;
+    ui.txtRecDir = txtRecDir;
+    ui.txtGuiCsv = txtGuiCsv;
+    ui.paths = paths;
     ui.data = state;
     guidata(fig, ui);
 
@@ -149,6 +247,13 @@ function launch_gui()
             img = imread(selectedPath);
             uiLocal.data.originalImg = img;
             uiLocal.data.imagePath = string(selectedPath);
+            uiLocal.data.plateBBox = [];
+            uiLocal.data.detectionDebug = struct();
+            uiLocal.data.segmentationDebug = struct();
+            uiLocal.data.ocrDebug = struct();
+            uiLocal.data.rawText = "UNKNOWN";
+            uiLocal.data.cleanedText = "UNKNOWN";
+            uiLocal.data.stateName = "UNKNOWN";
             axes(uiLocal.axOriginal); %#ok<LAXES>
             imshow(img);
             title(uiLocal.axOriginal, 'Original Image', 'FontSize', 11, 'FontWeight', 'bold');
@@ -156,6 +261,10 @@ function launch_gui()
             title(uiLocal.axPlate, 'Detected Plate', 'FontSize', 11, 'FontWeight', 'bold');
             set(uiLocal.txtRecognized, 'String', 'UNKNOWN', 'ForegroundColor', [0.7 0.1 0.1]);
             set(uiLocal.txtState, 'String', 'UNKNOWN', 'ForegroundColor', [0.7 0.1 0.1]);
+            set(uiLocal.txtDetectDir, 'String', 'Not available');
+            set(uiLocal.txtSegDir, 'String', 'Not available');
+            set(uiLocal.txtRecDir, 'String', 'Not available');
+            set(uiLocal.txtGuiCsv, 'String', char(uiLocal.data.guiResultsCsv));
             set(uiLocal.txtStatus, 'String', 'Image loaded successfully. Click Run Recognition.');
         catch loadErr
             set(uiLocal.txtStatus, 'String', 'Failed to load image. Please try again.');
@@ -173,15 +282,42 @@ function launch_gui()
         end
         set(uiLocal.txtStatus, 'String', 'Running recognition. Please wait...');
         drawnow;
+
+        pipelineNotes = "Pipeline completed.";
+        detectionResult = "Failure";
+        ocrResult = "Not Evaluated";
+        stateResult = "Not Evaluated";
+        overallResult = "Completed";
+        rawText = "UNKNOWN";
+        cleanedText = "UNKNOWN";
+        stateNameLocal = "UNKNOWN";
+        plateImg = [];
+        plateBBox = [];
+        detectionDebug = struct();
+        segmentationDebug = struct();
+        ocrDebug = struct();
+
         try
             [preprocessedImg, ~] = preprocessImage(uiLocal.data.originalImg);
-            [plateImg, ~, ~] = detectPlateRegion(preprocessedImg, uiLocal.data.originalImg);
-            [~, ~] = segmentCharacters(plateImg);
-            rawText = recognizePlateText(plateImg);
-            cleanedText = cleanRecognizedText(rawText);
-            stateNameLocal = identifyState(cleanedText);
+            [plateImg, plateBBox, detectionDebug] = detectPlateRegion(preprocessedImg, uiLocal.data.originalImg);
+
+            if ~isempty(plateImg)
+                detectionResult = "Success";
+                [~, ~, segmentationDebug] = segmentCharacters(plateImg);
+                [rawText, ocrDebug] = recognizePlateText(plateImg);
+                cleanedText = cleanRecognizedText(rawText);
+                stateNameLocal = identifyState(cleanedText);
+            else
+                detectionResult = "Failure";
+                pipelineNotes = "Detection failed: plate image is empty.";
+            end
 
             uiLocal.data.plateImg = plateImg;
+            uiLocal.data.plateBBox = plateBBox;
+            uiLocal.data.detectionDebug = detectionDebug;
+            uiLocal.data.segmentationDebug = segmentationDebug;
+            uiLocal.data.ocrDebug = ocrDebug;
+            uiLocal.data.rawText = rawText;
             uiLocal.data.cleanedText = cleanedText;
             uiLocal.data.stateName = stateNameLocal;
 
@@ -206,13 +342,135 @@ function launch_gui()
                 set(uiLocal.txtState, 'String', 'UNKNOWN', 'ForegroundColor', [0.7 0.1 0.1]);
             end
 
+            detectDir = localExtractDebugDir(detectionDebug, ["debugOutputDir", "outputDir"]);
+            segDir = localExtractDebugDir(segmentationDebug, ["outputDir", "debugOutputDir"]);
+            recDir = localExtractDebugDir(ocrDebug, ["outputDir", "debugOutputDir"]);
+            set(uiLocal.txtDetectDir, 'String', char(detectDir));
+            set(uiLocal.txtSegDir, 'String', char(segDir));
+            set(uiLocal.txtRecDir, 'String', char(recDir));
+            set(uiLocal.txtGuiCsv, 'String', char(uiLocal.data.guiResultsCsv));
+
+            if cleanedText == "UNKNOWN"
+                ocrResult = "Not Evaluated";
+                stateResult = "Not Evaluated";
+                if detectionResult == "Success"
+                    pipelineNotes = "OCR returned UNKNOWN.";
+                end
+            end
+
+            localAppendGuiResult(uiLocal, detectionResult, ocrResult, stateResult, overallResult, ...
+                pipelineNotes, detectDir, segDir, recDir);
             set(uiLocal.txtStatus, 'String', 'Recognition completed successfully.');
 
         catch runErr
+            pipelineNotes = "Recognition error: " + string(runErr.message);
+            localAppendGuiResult(uiLocal, detectionResult, ocrResult, stateResult, overallResult, ...
+                pipelineNotes, "Not available", "Not available", "Not available");
             set(uiLocal.txtStatus, 'String', 'Recognition failed. Check Command Window for details.');
             warning('Recognition error: %s', runErr.message);
         end
         guidata(fig, uiLocal);
+    end
+
+    function onOpenDetectionLog(~, ~)
+        uiLocal = guidata(fig);
+        p = localExtractDebugDir(uiLocal.data.detectionDebug, ["debugOutputDir", "outputDir"]);
+        localOpenPathOrWarn(p, uiLocal.txtStatus, "Detection log folder is not available.");
+    end
+
+    function onOpenSegmentationLog(~, ~)
+        uiLocal = guidata(fig);
+        p = localExtractDebugDir(uiLocal.data.segmentationDebug, ["outputDir", "debugOutputDir"]);
+        localOpenPathOrWarn(p, uiLocal.txtStatus, "Segmentation log folder is not available.");
+    end
+
+    function onOpenRecognitionLog(~, ~)
+        uiLocal = guidata(fig);
+        p = localExtractDebugDir(uiLocal.data.ocrDebug, ["outputDir", "debugOutputDir"]);
+        localOpenPathOrWarn(p, uiLocal.txtStatus, "Recognition log folder is not available.");
+    end
+
+    function onOpenReportTables(~, ~)
+        uiLocal = guidata(fig);
+        localOpenPathOrWarn(uiLocal.paths.reportTables, uiLocal.txtStatus, "Report tables folder is not available.");
+    end
+
+    function localOpenPathOrWarn(pathValue, txtStatusHandle, missingMsg)
+        p = string(pathValue);
+        if strlength(p) == 0 || p == "Not available" || ~exist(char(p), 'dir')
+            set(txtStatusHandle, 'String', missingMsg);
+            return;
+        end
+        try
+            winopen(char(p));
+            set(txtStatusHandle, 'String', "Opened: " + p);
+        catch
+            set(txtStatusHandle, 'String', "Failed to open path: " + p);
+        end
+    end
+
+    function dirValue = localExtractDebugDir(debugStruct, fieldPriority)
+        dirValue = "Not available";
+        if ~isstruct(debugStruct)
+            return;
+        end
+        for idx = 1:numel(fieldPriority)
+            fieldName = fieldPriority(idx);
+            if isfield(debugStruct, fieldName)
+                tmp = string(debugStruct.(fieldName));
+                if strlength(tmp) > 0
+                    dirValue = tmp;
+                    return;
+                end
+            end
+        end
+    end
+
+    function localAppendGuiResult(uiLocal, detectionResult, ocrResult, stateResult, overallResult, notes, detDir, segDir, recDir)
+        csvPath = char(uiLocal.data.guiResultsCsv);
+        [~, imageName, ext] = fileparts(char(uiLocal.data.imagePath));
+        imageName = string(imageName) + string(ext);
+        if strlength(imageName) == 0
+            imageName = "UNKNOWN_IMAGE";
+        end
+
+        row = table( ...
+            string(imageName), ...
+            string(uiLocal.data.cleanedText), ...
+            string(uiLocal.data.stateName), ...
+            string(detectionResult), ...
+            string(ocrResult), ...
+            string(stateResult), ...
+            string(overallResult), ...
+            string(notes), ...
+            string(detDir), ...
+            string(segDir), ...
+            string(recDir), ...
+            'VariableNames', { ...
+            'image_name','ocr_text','predicted_state','detection_result','ocr_result','state_result','overall_result', ...
+            'notes','detection_debug_dir','segmentation_debug_dir','recognition_debug_dir'});
+
+        try
+            [csvDir, ~, ~] = fileparts(csvPath);
+            if ~exist(csvDir, 'dir')
+                mkdir(csvDir);
+            end
+            if ~isfile(csvPath)
+                writetable(row, csvPath);
+            else
+                existing = readtable(csvPath, 'TextType', 'string');
+                requiredCols = row.Properties.VariableNames;
+                for i = 1:numel(requiredCols)
+                    if ~ismember(requiredCols{i}, existing.Properties.VariableNames)
+                        existing.(requiredCols{i}) = "";
+                    end
+                end
+                existing = existing(:, requiredCols);
+                writetable([existing; row], csvPath);
+            end
+        catch csvErr
+            warning('GUI result CSV append failed: %s', csvErr.message);
+        end
     end
 
 end

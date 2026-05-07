@@ -24,6 +24,8 @@ scriptPath = mfilename('fullpath');
 scriptFolder = fileparts(scriptPath);
 projectRoot = fileparts(scriptFolder);
 addpath(genpath(fullfile(projectRoot, 'src')));
+paths = ensureOutputFolders();
+fprintf('[TEST M2] Official debug root: %s\n', paths.plateDebugRoot);
 
 % -------------------------------------------------------------------------
 % 1. Load test image
@@ -73,6 +75,9 @@ if isfield(detectionDebug, 'numRegionsBeforeFiltering')
 end
 if isfield(detectionDebug, 'numConnectedComponents')
     fprintf('[TEST M2] Connected components (cleaned binary): %d\n', detectionDebug.numConnectedComponents);
+end
+if isfield(detectionDebug, 'debugOutputDir') && strlength(string(detectionDebug.debugOutputDir)) > 0
+    fprintf('[TEST M2] Debug output folder: %s\n', string(detectionDebug.debugOutputDir));
 end
 
 % -------------------------------------------------------------------------

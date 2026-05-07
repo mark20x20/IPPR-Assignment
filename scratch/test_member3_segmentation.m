@@ -1,131 +1,108 @@
-%TEST_MEMBER3_SEGMENTATION Visual and evaluation test for Member 3.
-%
-% Run this script from the project root.
-%
-% It will:
-%   1. Load cropped plate images from images/test/plate_samples/
-%   2. Run segmentation
-%   3. Display binary, cleaned, and bounding-box results
-%   4. Save result images into scratch/member3_results/
-%   5. Save a CSV evaluation table
+% test_member3_segmentation  Member 3 segmentation test runner.
 
 clear;
 clc;
 close all;
 
-scriptPath = mfilename("fullpath");
+scriptPath = mfilename('fullpath');
 scriptFolder = fileparts(scriptPath);
 projectRoot = fileparts(scriptFolder);
+addpath(genpath(fullfile(projectRoot, 'src')));
+paths = ensureOutputFolders();
+fprintf('[TEST M3] Official debug root: %s\n', paths.segmentationDebugRoot);
 
-addpath(genpath(fullfile(projectRoot, "src")));
+sampleFolder = fullfile(projectRoot, 'images', 'test', 'plate_samples');
 
-plateSampleFolder = fullfile(projectRoot, "images", "test", "plate_samples");
-outputFolder = fullfile(projectRoot, "scratch", "member3_results");
-
-if ~isfolder(outputFolder)
-    mkdir(outputFolder);
-end
-
-if ~isfolder(plateSampleFolder)
-    error("Plate sample folder not found: %s", plateSampleFolder);
+if ~isfolder(sampleFolder)
+    fprintf('No plate samples found. Please add cropped plate images for Member 3 testing.\n');
+    return;
 end
 
 imageFiles = [ ...
-    dir(fullfile(plateSampleFolder, "*.jpg")); ...
-    dir(fullfile(plateSampleFolder, "*.jpeg")); ...
-    dir(fullfile(plateSampleFolder, "*.png")); ...
-    dir(fullfile(plateSampleFolder, "*.bmp")) ...
-];
+    dir(fullfile(sampleFolder, '*.jpg')); ...
+    dir(fullfile(sampleFolder, '*.jpeg')); ...
+    dir(fullfile(sampleFolder, '*.png')); ...
+    dir(fullfile(sampleFolder, '*.bmp'))];
 
 if isempty(imageFiles)
-    error("No plate sample images found in: %s", plateSampleFolder);
+    fprintf('No plate samples found. Please add cropped plate images for Member 3 testing.\n');
+    return;
 end
 
-fileNames = strings(numel(imageFiles), 1);
-detectedCounts = zeros(numel(imageFiles), 1);
-expectedCounts = zeros(numel(imageFiles), 1);
-countDifference = zeros(numel(imageFiles), 1);
-status = strings(numel(imageFiles), 1);
+fprintf('[TEST M3] Found %d sample(s) in %s\n', numel(imageFiles), sampleFolder);
 
 for k = 1:numel(imageFiles)
     imagePath = fullfile(imageFiles(k).folder, imageFiles(k).name);
     plateImg = imread(imagePath);
 
-    [charImages, charBoxes] = segmentCharacters(plateImg);
+    [characterImages, characterBBoxes, segDebug] = segmentCharacters(plateImg); %#ok<ASGLU>
 
-    % Optional expected count:
-    % If the filename contains the expected plate text before an underscore,
-    % this script estimates expected characters from it.
-    % Example: "WXY1234_sample1.jpg" gives expected count 7.
-    [~, nameOnly, ~] = fileparts(imageFiles(k).name);
-    parts = split(nameOnly, "_");
-    expectedText = erase(parts(1), "-");
-    expectedText = erase(expectedText, " ");
-    estimatedExpectedCount = strlength(expectedText);
-
-    if estimatedExpectedCount <= 0
-        estimatedExpectedCount = NaN;
+    fprintf('[TEST M3] %s | chars=%d | status=%s\n', imageFiles(k).name, numel(characterImages), string(segDebug.status));
+    if isfield(segDebug, 'debugOutputDir')
+        fprintf('[TEST M3] Debug output folder: %s\n', string(segDebug.debugOutputDir));
     end
-
-    detectedCount = numel(charImages);
-
-    fileNames(k) = string(imageFiles(k).name);
-    detectedCounts(k) = detectedCount;
-    expectedCounts(k) = estimatedExpectedCount;
-
-    if isnan(estimatedExpectedCount)
-        countDifference(k) = NaN;
-        status(k) = "NO_EXPECTED_COUNT";
+    if isfield(segDebug, 'acceptedCharacterCount')
+        accCount = segDebug.acceptedCharacterCount;
     else
-        countDifference(k) = detectedCount - estimatedExpectedCount;
-
-        if detectedCount == estimatedExpectedCount
-            status(k) = "MATCH";
-        else
-            status(k) = "CHECK";
-        end
+        accCount = numel(characterImages);
     end
+    selPol = "";
+    if isfield(segDebug, 'selectedPolarity')
+        selPol = string(segDebug.selectedPolarity);
+    end
+    overlaySaved = "unknown";
+    if isfield(segDebug, 'debugOutputDir') && strlength(string(segDebug.debugOutputDir)) > 0
+        overlayPath = fullfile(char(segDebug.debugOutputDir), '09_character_boxes_overlay.png');
+        overlaySaved = string(exist(overlayPath, 'file') == 2);
+    end
+    savedFileCount = 0;
+    if isfield(segDebug, 'debugOutputDir') && strlength(string(segDebug.debugOutputDir)) > 0 && isfolder(char(segDebug.debugOutputDir))
+        savedFileCount = numel(dir(fullfile(char(segDebug.debugOutputDir), '*.*'))) - 2;
+    end
+    fprintf('[TEST M3] saved_files=%d | accepted_character_count=%d | selected_polarity=%s | overlay_saved=%s\n', ...
+        savedFileCount, accCount, selPol, overlaySaved);
 
-    figure("Name", imageFiles(k).name);
+    figure('Name', imageFiles(k).name);
 
-    subplot(2, 2, 1);
+    subplot(2, 3, 1);
     imshow(plateImg);
-    title("Original Cropped Plate");
+    title('Original Plate');
 
-    subplot(2, 2, 2);
-    binaryImg = binarizePlate(plateImg);
-    imshow(binaryImg);
-    title("Binarized Plate");
+    subplot(2, 3, 2);
+    if isfield(segDebug, 'refinedPlateImg') && ~isempty(segDebug.refinedPlateImg)
+        imshow(segDebug.refinedPlateImg);
+    else
+        imshow(plateImg);
+    end
+    title('Refined Plate');
 
-    subplot(2, 2, 3);
-    cleanedImg = cleanBinaryImage(binaryImg);
-    imshow(cleanedImg);
-    title("Cleaned Binary Image");
+    subplot(2, 3, 3);
+    if isfield(segDebug, 'selectedBinaryImg') && ~isempty(segDebug.selectedBinaryImg)
+        imshow(segDebug.selectedBinaryImg);
+    else
+        imshow(false(size(plateImg, 1), size(plateImg, 2)));
+    end
+    title('Selected Binary');
 
-    subplot(2, 2, 4);
-    imshow(plateImg);
-    title("Detected Character Boxes");
+    subplot(2, 3, 4);
+    if isfield(segDebug, 'cleanedBinaryImg') && ~isempty(segDebug.cleanedBinaryImg)
+        imshow(segDebug.cleanedBinaryImg);
+    else
+        imshow(false(size(plateImg, 1), size(plateImg, 2)));
+    end
+    title('Cleaned Binary');
+
+    subplot(2, 3, [5 6]);
+    if isfield(segDebug, 'refinedPlateImg') && ~isempty(segDebug.refinedPlateImg)
+        base = segDebug.refinedPlateImg;
+    else
+        base = plateImg;
+    end
+    imshow(base);
     hold on;
-
-    for i = 1:size(charBoxes, 1)
-        rectangle("Position", charBoxes(i, :), ...
-            "EdgeColor", "g", ...
-            "LineWidth", 2);
+    for i = 1:size(characterBBoxes, 1)
+        rectangle('Position', characterBBoxes(i, :), 'EdgeColor', 'g', 'LineWidth', 2);
     end
-
     hold off;
-
-    outputImagePath = fullfile(outputFolder, nameOnly + "_segmentation.png");
-    saveSegmentationResult(plateImg, charBoxes, outputImagePath);
-
-    fprintf("Image: %s | Detected characters: %d | Status: %s\n", ...
-        imageFiles(k).name, detectedCount, status(k));
+    title('Character Boxes Overlay');
 end
-
-resultsTable = table(fileNames, expectedCounts, detectedCounts, ...
-    countDifference, status);
-
-csvPath = fullfile(outputFolder, "member3_segmentation_results.csv");
-writetable(resultsTable, csvPath);
-
-fprintf("\nSaved result images and CSV to: %s\n", outputFolder);

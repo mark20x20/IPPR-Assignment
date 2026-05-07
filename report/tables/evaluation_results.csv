@@ -1,0 +1,9 @@
+image_name,vehicle_type,expected_text,ocr_text,expected_state,predicted_state,detection_result,ocr_result,state_result,overall_result,notes
+plate_kl_01.jpg,plate_sample,VAS1532,VAS1532,Selangor,Selangor,Success,Correct,Correct,Success,Direct OCR on cropped plate sample.
+candidate_crop_rank_01.png,plate_sample,JRD6561,JRD6561,Johor,Johor,Success,Correct,Correct,Success,Direct OCR on cropped plate sample.
+plate_selangor_01.jpg,plate_sample,VLV2121,UNKNOWN,Selangor,UNKNOWN,Success,Failure,UNKNOWN,Failure,Direct OCR on cropped plate sample.
+sample1.png,plate_sample,JRD6561,SJR06561,Johor,Selangor,Success,Partial,Incorrect,Partial Success,Direct OCR on cropped plate sample.
+plate_kl_01.jpg,plate_sample,VAS1532,VAS1532,Selangor,Selangor,Success,Correct,Correct,Success,Direct OCR on cropped plate sample.
+candidate_crop_rank_01.png,plate_sample,JRD6561,JRD6561,Johor,Johor,Success,Correct,Correct,Success,Direct OCR on cropped plate sample.
+plate_selangor_01.jpg,plate_sample,VLV2121,UNKNOWN,Selangor,UNKNOWN,Success,Failure,UNKNOWN,Failure,Direct OCR on cropped plate sample.
+sample1.png,plate_sample,JRD6561,SJR06561,Johor,Selangor,Success,Partial,Incorrect,Partial Success,Direct OCR on cropped plate sample.
